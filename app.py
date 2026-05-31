@@ -1,5 +1,7 @@
 from pathlib import Path
+
 import streamlit as st
+
 from src.ingest import load_pdf
 from src.chunking import split_documents
 from src.embeddings import get_embeddings
@@ -7,7 +9,10 @@ from src.vector_store import create_vector_store
 from src.retriever import get_retriever
 from src.llm import get_llm
 from src.rag import build_context
+
 from src.job_extractor import extract_job_text
+from src.job_cleaner import clean_job_text
+from src.job_match import build_job_match_prompt
 
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -19,6 +24,10 @@ st.set_page_config(
 
 st.title("📄 CV RAG Assistant")
 
+# ==================================================
+# CV UPLOAD
+# ==================================================
+
 st.header("📄 CV Upload")
 
 uploaded_file = st.file_uploader(
@@ -26,30 +35,16 @@ uploaded_file = st.file_uploader(
     type=["pdf"]
 )
 
-st.header("💼 Job Match")
-
-job_url = st.text_input(
-    "Job Posting URL"
-)
-
-if st.button("Analyze Job"):
-    if not job_url:
-        st.warning("Please enter a job URL.")
-    else:
-        try:
-            job_text = extract_job_text(job_url)
-            st.success("Job description extracted")
-            st.subheader("Job Preview")
-            st.write(job_text[:3000])
-        except Exception as e:
-            st.error(f"Failed to extract job: {e}")
-
 if uploaded_file:
 
     file_path = UPLOAD_DIR / uploaded_file.name
 
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
+
+    # ----------------------------------------------
+    # Document Processing
+    # ----------------------------------------------
 
     docs = load_pdf(str(file_path))
 
@@ -66,7 +61,17 @@ if uploaded_file:
     )
 
     st.success("Vector database created")
-    question = st.text_input("Ask a question about your CV")
+
+    # ----------------------------------------------
+    # CV CHAT
+    # ----------------------------------------------
+
+    st.header("🤖 Chat With Your CV")
+
+    question = st.text_input(
+        "Ask a question about your CV",
+        key="cv_question"
+    )
 
     if question:
 
@@ -79,19 +84,19 @@ if uploaded_file:
         llm = get_llm()
 
         prompt = f"""
-        You are a CV assistant.
+You are a CV assistant.
 
-        Answer only using the supplied context.
+Answer only using the supplied context.
 
-        If the answer cannot be found in the context,
-        say so.
+If the answer cannot be found in the context,
+say so.
 
-        Context:
-        {context}
+Context:
+{context}
 
-        Question:
-        {question}
-        """
+Question:
+{question}
+"""
 
         response = llm.invoke(prompt)
 
@@ -99,11 +104,76 @@ if uploaded_file:
 
         st.write(response.content)
 
-    st.subheader("Preview")
+    # ----------------------------------------------
+    # JOB MATCH
+    # ----------------------------------------------
 
-    st.write(docs[0].page_content[:2000])
-    st.subheader("Chunk Preview")
+    st.header("💼 Job Match Analysis")
 
-    for i, chunk in enumerate(chunks[:3]):
-        st.markdown(f"### Chunk {i + 1}")
-        st.write(chunk.page_content)
+    job_url = st.text_input(
+        "Job Posting URL",
+        key="job_url"
+    )
+
+    if st.button(
+        "Analyze Job",
+        key="analyze_job"
+    ):
+
+        try:
+
+            raw_job_text = extract_job_text(job_url)
+
+            job_text = clean_job_text(raw_job_text)
+
+            retriever = get_retriever(db)
+
+            results = retriever.invoke(job_text)
+
+            cv_context = build_context(results)
+
+            prompt = build_job_match_prompt(
+                cv_context,
+                job_text
+            )
+
+            llm = get_llm()
+
+            response = llm.invoke(prompt)
+
+            st.subheader("Job Match Report")
+
+            st.write(response.content)
+
+            with st.expander(
+                "Retrieved CV Context"
+            ):
+
+                for doc in results:
+                    st.write(doc.page_content)
+
+        except Exception as e:
+
+            st.error(
+                f"Failed to analyze job: {e}"
+            )
+
+    # ----------------------------------------------
+    # DEBUG SECTION
+    # ----------------------------------------------
+
+    with st.expander("PDF Preview"):
+
+        st.write(
+            docs[0].page_content[:2000]
+        )
+
+    with st.expander("Chunk Preview"):
+
+        for i, chunk in enumerate(chunks[:3]):
+
+            st.markdown(
+                f"### Chunk {i + 1}"
+            )
+
+            st.write(chunk.page_content)
