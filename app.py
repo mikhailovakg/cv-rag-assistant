@@ -2,6 +2,8 @@ from pathlib import Path
 import streamlit as st
 from src.ingest import load_pdf
 from src.chunking import split_documents
+from src.embeddings import get_embeddings
+from src.vector_store import create_vector_store
 
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -31,6 +33,15 @@ if uploaded_file:
 
     st.success(f"Loaded {len(docs)} pages")
     st.info(f"Created {len(chunks)} chunks")
+
+    embeddings = get_embeddings()
+
+    db = create_vector_store(
+        chunks,
+        embeddings
+    )
+
+    st.success("Vector database created")
 
     st.success(f"Loaded {len(docs)} pages")
 
