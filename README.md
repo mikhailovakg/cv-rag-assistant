@@ -120,7 +120,3 @@ Change the Ollama model in `get_llm()` if you use a different local model.
 - [Hugging Face Sentence Transformers](https://www.sbert.net/) — embeddings
 - [Ollama](https://ollama.com/) — local LLM
 - [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) — job page text extraction
-
-## License
-
-Add your license here if you publish the repository.
