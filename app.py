@@ -7,6 +7,7 @@ from src.vector_store import create_vector_store
 from src.retriever import get_retriever
 from src.llm import get_llm
 from src.rag import build_context
+from src.job_extractor import extract_job_text
 
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -18,10 +19,30 @@ st.set_page_config(
 
 st.title("📄 CV RAG Assistant")
 
+st.header("📄 CV Upload")
+
 uploaded_file = st.file_uploader(
     "Choose a PDF file",
     type=["pdf"]
 )
+
+st.header("💼 Job Match")
+
+job_url = st.text_input(
+    "Job Posting URL"
+)
+
+if st.button("Analyze Job"):
+    if not job_url:
+        st.warning("Please enter a job URL.")
+    else:
+        try:
+            job_text = extract_job_text(job_url)
+            st.success("Job description extracted")
+            st.subheader("Job Preview")
+            st.write(job_text[:3000])
+        except Exception as e:
+            st.error(f"Failed to extract job: {e}")
 
 if uploaded_file:
 
@@ -78,7 +99,6 @@ if uploaded_file:
 
         st.write(response.content)
 
-    st.success(f"Loaded {len(docs)} pages")
     st.subheader("Preview")
 
     st.write(docs[0].page_content[:2000])
